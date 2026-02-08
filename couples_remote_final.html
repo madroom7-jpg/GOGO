@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Couples Remote P2P</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a6f, #c44569, #6c5ce7, #a29bfe);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 25px;
+            padding: 20px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 95vh;
+            overflow-y: auto;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a6f, #c44569);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+
+        .screen {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .connection-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .room-code {
+            font-size: 1.5em;
+            font-weight: bold;
+            letter-spacing: 3px;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            word-break: break-all;
+            font-family: monospace;
+        }
+
+        @media (max-width: 480px) {
+            .room-code {
+                font-size: 1.2em;
+                letter-spacing: 1px;
+            }
+        }
+
+        input {
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1em;
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #ff6b6b;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin: 5px;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+            width: 100%;
+            max-width: 300px;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+
+        .status-indicator.connected { background: #00d26a; }
+        .status-indicator.waiting { background: #ffa502; }
+        .status-indicator.error { background: #ff6b6b; }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .card-container {
+            perspective: 1000px;
+            margin: 30px 0;
+            min-height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 500px;
+            height: 250px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s;
+            cursor: pointer;
+        }
+
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-front {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            transform: rotateY(180deg);
+        }
+
+        .card-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .card-type {
+            font-size: 0.8em;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .card-content {
+            font-size: 1.1em;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+
+        .score-board {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .player-score {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .player-score.active {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.5);
+        }
+
+        .player-name {
+            font-size: 1em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .score {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b6b, #ee5a6f);
+            transition: width 0.5s;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .turn-indicator {
+            text-align: center;
+            font-size: 1.2em;
+            padding: 15px;
+            margin: 15px 0;
+            background: linear-gradient(135deg, #ffa502, #ff6348);
+            color: white;
+            border-radius: 15px;
+            font-weight: bold;
+        }
+
+        .info-text {
+            text-align: center;
+            color: #666;
+            margin: 15px 0;
+            line-height: 1.6;
+            font-size: 0.9em;
+        }
+
+        .copy-btn {
+            background: linear-gradient(135deg, #00d26a, #00a854);
+            padding: 10px 20px;
+            font-size: 0.9em;
+            max-width: 150px;
+            margin: 10px auto;
+        }
+
+        .debug-info {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-size: 0.8em;
+            color: #333;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🔥 COUPLES REMOTE 🔥</h1>
+        <p class="subtitle">Play from anywhere in the world!</p>
+
+        <!-- Connection Screen -->
+        <div id="connectionScreen" class="screen active">
+            <div style="text-align: center;">
+                <p class="info-text">Ready to connect with your partner?</p>
+                
+                <input type="text" id="playerName" placeholder="Enter your name">
+                
+                <button onclick="createRoom()">🎮 Create Room (You Start)</button>
+                <button onclick="showJoinRoom()" style="background: linear-gradient(135deg, #667eea, #764ba2);">🔗 Join Room (Partner Waiting)</button>
+                
+                <div id="joinRoomInput" style="display: none; margin-top: 20px;">
+                    <input type="text" id="roomCodeInput" placeholder="Paste code from partner">
+                    <button onclick="joinRoom()">Connect Now!</button>
+                </div>
+                
+                <p class="info-text" style="margin-top: 20px; font-size: 0.8em;">💡 Tip: One person creates, the other joins</p>
+            </div>
+        </div>
+
+        <!-- Waiting Screen -->
+        <div id="waitingScreen" class="screen">
+            <div style="text-align: center;">
+                <div class="connection-box">
+                    <p style="font-size: 1.2em; margin-bottom: 15px;">
+                        <span class="status-indicator waiting"></span>
+                        <span id="waitingStatus">Connecting...</span>
+                    </p>
+                    <p style="font-size: 0.9em; opacity: 0.9;">Share this ID with your partner:</p>
+                    <div class="room-code" id="displayRoomCode">Loading...</div>
+                    <button class="copy-btn" onclick="copyRoomCode()">📋 Copy ID</button>
+                </div>
+                <p class="info-text">Tell your partner to:<br>1. Click "Join Room"<br>2. Paste this ID<br>3. Click "Connect Now"</p>
+                <div class="debug-info" id="debugInfo"></div>
+            </div>
+        </div>
+
+        <!-- Mode Selection Screen -->
+        <div id="modeScreen" class="screen">
+            <div style="text-align: center;">
+                <div class="connection-box">
+                    <p style="font-size: 1.2em;">
+                        <span class="status-indicator connected"></span>
+                        🎉 Connected to <span id="connectedPartner"></span>!
+                    </p>
+                </div>
+                
+                <p class="info-text">Choose your game mode:</p>
+                
+                <button onclick="selectMode('spicy')" style="padding: 20px;">🌶️ Spicy</button>
+                <button onclick="selectMode('romantic')" style="background: linear-gradient(135deg, #ff6b9d, #c44569); padding: 20px;">💕 Romantic</button>
+                <button onclick="selectMode('wild')" style="background: linear-gradient(135deg, #ff6348, #ff4757); padding: 20px;">🔥 Wild</button>
+                <button onclick="selectMode('mixed')" style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px;">🎲 Mixed</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="screen">
+            <div class="score-board">
+                <div class="player-score" id="p1Score">
+                    <div class="player-name" id="p1Name">Player 1</div>
+                    <div class="score"><span id="p1Points">0</span> ❤️</div>
+                </div>
+                <div class="player-score" id="p2Score">
+                    <div class="player-name" id="p2Name">Player 2</div>
+                    <div class="score"><span id="p2Points">0</span> ❤️</div>
+                </div>
+            </div>
+
+            <div class="turn-indicator" id="turnIndicator">Your Turn!</div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+
+            <div class="card-container">
+                <div class="card" id="card" onclick="flipCard()">
+                    <div class="card-face card-front">
+                        <div class="card-icon">❓</div>
+                        <div class="card-content">TAP TO REVEAL</div>
+                    </div>
+                    <div class="card-face card-back">
+                        <div class="card-type" id="cardType">CHALLENGE</div>
+                        <div class="card-content" id="cardContent">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button onclick="completeChallenge()">✅ Done!</button>
+                <button onclick="skipChallenge()" style="background: linear-gradient(135deg, #999, #777);">⏭️ Skip</button>
+            </div>
+
+            <p class="info-text" id="gameInfo">Tap the card when it's your turn!</p>
+        </div>
+
+        <!-- End Screen -->
+        <div id="endScreen" class="screen">
+            <div style="text-align: center;">
+                <h2 style="font-size: 2em; margin: 20px 0;">🎉 Game Over! 🎉</h2>
+                <div class="score-board">
+                    <div class="player-score">
+                        <div class="player-name" id="finalP1Name">Player 1</div>
+                        <div class="score"><span id="finalP1Score">0</span> ❤️</div>
+                    </div>
+                    <div class="player-score">
+                        <div class="player-name" id="finalP2Name">Player 2</div>
+                        <div class="score"><span id="finalP2Score">0</span> ❤️</div>
+                    </div>
+                </div>
+                <h3 id="winner" style="margin: 30px 0; font-size: 1.8em; color: #ff6b6b;"></h3>
+                <p style="margin: 20px 0; color: #666;">Hope you both had fun! 🔥</p>
+                <button onclick="location.reload()" style="padding: 20px;">🔄 Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const challenges = {
+            spicy: [
+                { type: "DARE", content: "Send a voice message describing what you find irresistible about them", points: 2 },
+                { type: "CHALLENGE", content: "Text them your hottest fantasy right now", points: 3 },
+                { type: "DARE", content: "Send a photo of what you're wearing", points: 2 },
+                { type: "HOT QUESTION", content: "What do you want to do the next time we're together?", points: 1 },
+                { type: "DARE", content: "Describe in detail how you'd seduce them", points: 3 },
+                { type: "CHALLENGE", content: "Tell them what part of their body you miss most", points: 2 },
+                { type: "DARE", content: "Send them a flirty selfie", points: 2 },
+                { type: "HOT QUESTION", content: "What's your favorite memory of us being intimate?", points: 1 },
+                { type: "DARE", content: "Describe the perfect date that ends at your place", points: 3 },
+                { type: "CHALLENGE", content: "Share one secret desire you've been thinking about", points: 3 }
+            ],
+            romantic: [
+                { type: "SWEET DARE", content: "Send them a voice note saying why you love them", points: 2 },
+                { type: "LOVE QUESTION", content: "What moment made you realize you were falling for me?", points: 1 },
+                { type: "CHALLENGE", content: "List 5 things you adore about them in a text", points: 2 },
+                { type: "SWEET DARE", content: "Send a photo of something that reminds you of them", points: 2 },
+                { type: "LOVE QUESTION", content: "What's your favorite memory of us together?", points: 1 },
+                { type: "CHALLENGE", content: "Tell them why you chose them over anyone else", points: 2 },
+                { type: "SWEET DARE", content: "Send a romantic song that makes you think of them", points: 2 },
+                { type: "LOVE QUESTION", content: "How do I make you feel loved?", points: 1 },
+                { type: "CHALLENGE", content: "Describe our future together in one paragraph", points: 2 },
+                { type: "SWEET DARE", content: "Send them the most romantic emoji combination you can think of", points: 1 }
+            ],
+            wild: [
+                { type: "EXTREME DARE", content: "Play truth or dare - let them choose one for you right now", points: 3 },
+                { type: "WILD CHALLENGE", content: "Describe your wildest fantasy with them in detail", points: 4 },
+                { type: "EXTREME DARE", content: "Send a teasing photo (your choice how teasing)", points: 4 },
+                { type: "WILD QUESTION", content: "What's the craziest thing you want to try together?", points: 2 },
+                { type: "EXTREME DARE", content: "Video call them and give them a show", points: 5 },
+                { type: "WILD CHALLENGE", content: "Sext them like it's your first time doing it", points: 4 },
+                { type: "EXTREME DARE", content: "Tell them what you'd do if they were there right now", points: 3 },
+                { type: "WILD QUESTION", content: "Where's the most adventurous place you'd want to be with me?", points: 2 },
+                { type: "WILD CHALLENGE", content: "Play 20 questions but make every question spicy", points: 3 },
+                { type: "EXTREME DARE", content: "Send them a voice note with your sexiest voice", points: 4 }
+            ]
+        };
+
+        let peer = null;
+        let conn = null;
+        let myId = '';
+        let myName = '';
+        let partnerName = '';
+        let isHost = false;
+        let myTurn = false;
+        let gameMode = '';
+        let currentDeck = [];
+        let currentIndex = 0;
+        let isFlipped = false;
+        let myScore = 0;
+        let partnerScore = 0;
+        let totalCards = 10;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 3;
+
+        function createRoom() {
+            myName = document.getElementById('playerName').value.trim() || 'Player 1';
+            isHost = true;
+            myTurn = true;
+            
+            document.getElementById('waitingStatus').textContent = 'Initializing...';
+            showScreen('waitingScreen');
+            
+            // Initialize peer with multiple server options
+            peer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
+                    ]
+                }
+            });
+            
+            peer.on('open', function(id) {
+                myId = id;
+                document.getElementById('displayRoomCode').textContent = id;
+                document.getElementById('waitingStatus').textContent = 'Waiting for partner...';
+                updateDebugInfo('Ready! Peer ID: ' + id);
+                console.log('My peer ID is: ' + id);
+            });
+
+            peer.on('connection', function(connection) {
+                conn = connection;
+                setupConnection();
+            });
+
+            peer.on('error', function(err) {
+                console.error('Peer error:', err);
+                updateDebugInfo('Error: ' + err.type);
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    document.getElementById('waitingStatus').textContent = `Retrying... (${reconnectAttempts}/${maxReconnectAttempts})`;
+                    setTimeout(createRoom, 2000);
+                } else {
+                    alert('Connection failed. Please refresh and try again.');
+                }
+            });
+        }
+
+        function showJoinRoom() {
+            document.getElementById('joinRoomInput').style.display = 'block';
+        }
+
+        function joinRoom() {
+            const partnerId = document.getElementById('roomCodeInput').value.trim();
+            myName = document.getElementById('playerName').value.trim() || 'Player 2';
+            
+            if (!partnerId) {
+                alert('Please paste the ID from your partner');
+                return;
+            }
+
+            isHost = false;
+            myTurn = false;
+            
+            document.getElementById('waitingStatus').textContent = 'Connecting...';
+            document.getElementById('displayRoomCode').textContent = partnerId;
+            showScreen('waitingScreen');
+            
+            // Initialize peer
+            peer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
+                    ]
+                }
+            });
+            
+            peer.on('open', function(id) {
+                myId = id;
+                updateDebugInfo('My ID: ' + id + ' | Connecting to: ' + partnerId);
+                console.log('Connecting to: ' + partnerId);
+                
+                conn = peer.connect(partnerId, {
+                    reliable: true
+                });
+                
+                setupConnection();
+                
+                conn.on('open', function() {
+                    console.log('Connection established!');
+                    conn.send({
+                        type: 'join',
+                        name: myName
+                    });
+                });
+            });
+
+            peer.on('error', function(err) {
+                console.error('Connection error:', err);
+                updateDebugInfo('Error: ' + err.type + ' - ' + err.message);
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    document.getElementById('waitingStatus').textContent = `Retrying... (${reconnectAttempts}/${maxReconnectAttempts})`;
+                    setTimeout(() => {
+                        conn = peer.connect(partnerId, { reliable: true });
+                        setupConnection();
+                    }, 3000);
+                } else {
+                    alert('Could not connect to your partner. Make sure:\n1. They created a room\n2. You copied the full ID correctly\n3. Both have internet connection\n\nTry refreshing both pages and starting over.');
+                }
+            });
+        }
+
+        function setupConnection() {
+            conn.on('data', function(data) {
+                handleMessage(data);
+            });
+
+            conn.on('open', function() {
+                document.getElementById('waitingStatus').textContent = 'Connected!';
+                updateDebugInfo('Connection established successfully!');
+            });
+
+            conn.on('close', function() {
+                alert('Partner disconnected! Refresh to reconnect.');
+            });
+
+            conn.on('error', function(err) {
+                console.error('Connection error:', err);
+                updateDebugInfo('Connection error: ' + err);
+            });
+        }
+
+        function handleMessage(data) {
+            console.log('Received:', data);
+            
+            switch(data.type) {
+                case 'join':
+                    partnerName = data.name;
+                    document.getElementById('connectedPartner').textContent = partnerName;
+                    if (isHost) {
+                        conn.send({
+                            type: 'joined',
+                            name: myName
+                        });
+                    }
+                    showScreen('modeScreen');
+                    break;
+                    
+                case 'joined':
+                    partnerName = data.name;
+                    document.getElementById('connectedPartner').textContent = partnerName;
+                    showScreen('modeScreen');
+                    break;
+                    
+                case 'mode':
+                    gameMode = data.mode;
+                    currentDeck = data.deck;
+                    startGame();
+                    break;
+                    
+                case 'flip':
+                    flipCard();
+                    break;
+                    
+                case 'complete':
+                    if (data.isPartner) {
+                        partnerScore += currentDeck[currentIndex].points || 1;
+                    }
+                    updateScores();
+                    nextCard();
+                    break;
+                    
+                case 'skip':
+                    nextCard();
+                    break;
+            }
+        }
+
+        function selectMode(mode) {
+            gameMode = mode;
+            
+            // Build deck
+            if (gameMode === 'mixed') {
+                currentDeck = [
+                    ...challenges.spicy.slice(0, 3),
+                    ...challenges.romantic.slice(0, 4),
+                    ...challenges.wild.slice(0, 3)
+                ];
+            } else {
+                currentDeck = [...challenges[gameMode]].slice(0, totalCards);
+            }
+            
+            currentDeck = currentDeck.sort(() => Math.random() - 0.5);
+            
+            if (isHost) {
+                conn.send({
+                    type: 'mode',
+                    mode: mode,
+                    deck: currentDeck
+                });
+            }
+            
+            startGame();
+        }
+
+        function startGame() {
+            if (isHost) {
+                document.getElementById('p1Name').textContent = myName;
+                document.getElementById('p2Name').textContent = partnerName;
+            } else {
+                document.getElementById('p1Name').textContent = partnerName;
+                document.getElementById('p2Name').textContent = myName;
+            }
+            
+            showScreen('gameScreen');
+            updateTurnIndicator();
+            loadCard();
+        }
+
+        function loadCard() {
+            if (currentIndex >= currentDeck.length) {
+                endGame();
+                return;
+            }
+
+            const challenge = currentDeck[currentIndex];
+            document.getElementById('cardType').textContent = challenge.type;
+            document.getElementById('cardContent').textContent = challenge.content;
+            
+            isFlipped = false;
+            document.getElementById('card').classList.remove('flipped');
+            
+            const progress = ((currentIndex + 1) / currentDeck.length) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+            
+            updateScores();
+        }
+
+        function flipCard() {
+            if (!myTurn && !isFlipped) {
+                return;
+            }
+            
+            isFlipped = !isFlipped;
+            document.getElementById('card').classList.toggle('flipped');
+            
+            if (myTurn && conn && conn.open) {
+                conn.send({ type: 'flip' });
+            }
+        }
+
+        function completeChallenge() {
+            if (!myTurn) return;
+            
+            const points = currentDeck[currentIndex].points || 1;
+            myScore += points;
+            
+            if (conn && conn.open) {
+                conn.send({
+                    type: 'complete',
+                    isPartner: true
+                });
+            }
+            
+            updateScores();
+            nextCard();
+        }
+
+        function skipChallenge() {
+            if (!myTurn) return;
+            
+            if (conn && conn.open) {
+                conn.send({ type: 'skip' });
+            }
+            
+            nextCard();
+        }
+
+        function nextCard() {
+            currentIndex++;
+            myTurn = !myTurn;
+            updateTurnIndicator();
+            loadCard();
+        }
+
+        function updateTurnIndicator() {
+            const indicator = document.getElementById('turnIndicator');
+            const p1Score = document.getElementById('p1Score');
+            const p2Score = document.getElementById('p2Score');
+            
+            if (myTurn) {
+                indicator.textContent = '🎯 YOUR TURN!';
+                indicator.style.background = 'linear-gradient(135deg, #00d26a, #00a854)';
+                document.getElementById('gameInfo').textContent = 'Tap the card to reveal!';
+                
+                if (isHost) {
+                    p1Score.classList.add('active');
+                    p2Score.classList.remove('active');
+                } else {
+                    p2Score.classList.add('active');
+                    p1Score.classList.remove('active');
+                }
+            } else {
+                indicator.textContent = "⏳ " + partnerName.toUpperCase() + "'S TURN";
+                indicator.style.background = 'linear-gradient(135deg, #ffa502, #ff6348)';
+                document.getElementById('gameInfo').textContent = 'Waiting for ' + partnerName + '...';
+                
+                if (isHost) {
+                    p2Score.classList.add('active');
+                    p1Score.classList.remove('active');
+                } else {
+                    p1Score.classList.add('active');
+                    p2Score.classList.remove('active');
+                }
+            }
+        }
+
+        function updateScores() {
+            if (isHost) {
+                document.getElementById('p1Points').textContent = myScore;
+                document.getElementById('p2Points').textContent = partnerScore;
+            } else {
+                document.getElementById('p1Points').textContent = partnerScore;
+                document.getElementById('p2Points').textContent = myScore;
+            }
+        }
+
+        function endGame() {
+            if (isHost) {
+                document.getElementById('finalP1Name').textContent = myName;
+                document.getElementById('finalP2Name').textContent = partnerName;
+                document.getElementById('finalP1Score').textContent = myScore;
+                document.getElementById('finalP2Score').textContent = partnerScore;
+            } else {
+                document.getElementById('finalP1Name').textContent = partnerName;
+                document.getElementById('finalP2Name').textContent = myName;
+                document.getElementById('finalP1Score').textContent = partnerScore;
+                document.getElementById('finalP2Score').textContent = myScore;
+            }
+            
+            let winnerText = "";
+            if (myScore > partnerScore) {
+                winnerText = `🏆 ${myName} Wins! 🏆`;
+            } else if (partnerScore > myScore) {
+                winnerText = `🏆 ${partnerName} Wins! 🏆`;
+            } else {
+                winnerText = "🏆 It's a Tie! 🏆";
+            }
+            
+            document.getElementById('winner').textContent = winnerText;
+            showScreen('endScreen');
+        }
+
+        function copyRoomCode() {
+            const code = myId;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('✅ ID copied to clipboard!\n\nSend this to your partner via:\n• WhatsApp\n• Text message\n• Email\n• Any messaging app');
+            }).catch(() => {
+                prompt('Copy this ID and send to your partner:', code);
+            });
+        }
+
+        function updateDebugInfo(text) {
+            const debugEl = document.getElementById('debugInfo');
+            if (debugEl) {
+                debugEl.textContent = text;
+            }
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+    </script>
+</body>
+</html>
